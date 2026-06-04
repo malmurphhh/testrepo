@@ -1,7 +1,7 @@
 ---
 title: "Practical 1 - Medical Databases: Predicting Sepsis from ICU Data"
 author: "Mallory Murphy"
-date: "2026-05-25"
+date: "2026-06-04"
 output: html_document
 ---
 ```{r setup, include = FALSE}
@@ -110,7 +110,6 @@ SepsisLabel: Sepsis patients, SepsisLabel is 1 if t≥tsepsis−6 and 0 if t<tse
 
 Clinically diagnosing sepsis commonly involves checking vital signs like temperature, heart rate, blood pressure, etc. These vital signs would likely give some indication if the body is working to fight an infection. For this reason, the three variables I hypothesize to be predictors of sepsis is diastolic blood pressure (because it was found to be a slightly better predictors that systolic blood pressure in the Gao et al. article), heart rate, and temperature. 
 
-
 ---
 
 ## 2 Data Loading and Splitting
@@ -203,9 +202,11 @@ train |>
 
 **Q6. (3 marks)**  Given the class imbalance, which of the following 2 metrics might be the most misleading and why? accuracy, precision, recall, F1-score, ROC-AUC, PR-AUC?
 
-Accuracy would be misleading because ... https://machinelearningmastery.com/tour-of-evaluation-metrics-for-imbalanced-classification/
+Accuracy ((TP+TN)/total N) would be misleading because there is such large class imbalace that if the model predicts all positive cases incorrectly but all negative cases correctly, the model would still achieve a high accuracy score (in this case, ~98%). 
+https://towardsdatascience.com/precision-recall-curve-is-more-informative-than-roc-in-imbalanced-data-4c95250242f6/
 
-Precision would also be misleading because ... https://www.google.com/search?q=precision+and+recall+impacted+when+class+imbalance&oq=precision+and+recall+impacted+when+class+imbalance&gs_lcrp=EgZjaHJvbWUyCwgAEEUYChg5GKABMgkIARAhGAoYoAEyCQgCECEYChigATIHCAMQIRifBTIHCAQQIRifBTIHCAUQIRifBdIBCDgxNTNqMGo3qAIAsAIA&sourceid=chrome&ie=UTF-8
+ROC-AUC would also be misleading because it plots true positives against false positives and in this case where true negatives dominate the dataset, the demoninator of the false positive rate (FP/(FP+TN)) is over-inflated due to many more true negatives which essentially overshadows any detection of false positives. 
+https://www.preprints.org/manuscript/202510.0958
 
 ### 3.2 Missingness
 
@@ -242,7 +243,7 @@ train |>
 
 In the entire training set (Q6), the variables with the most missing values were: Troponinl, Bilirubin_direct, and Fibrinogen. Those were also the same variables among those with Sepsis, however, Fibrinogen was listed second instead of third for most missing.
 
-A lab value could be missing for several reasons. Firslty, the test to get that measurement might not have been completed. There could have been an error with the test measuring that variable or an error in inputting the data into the EHR. If there are differences in missingness between people with vs without Sepsis, this could be informative. Missingness at random could still be informative for administrative purposes but less so for clinical purposes. In this case, missingness does not seem to differ by Sepsis status. Missing at random would be OK to be dropped and move forward with a complete case analysis as so long as missingness does not exceed >5%. However, which such a high degree of missingness (approximately 100%), it would be best to impute instead of drop.
+A lab value could be missing for several reasons. Firslty, the test to get that measurement might not have been completed. There could have been an error with the test measuring that variable or an error in inputting the data into the EHR. If there are differences in missingness between people with vs without Sepsis, this could be informative. Missingness at random could still be informative for administrative purposes but less so for clinical purposes. In this case, missingness does not seem to differ by Sepsis status. Missing at random would be OK to be dropped and move forward with a complete case analysis as so long as missingness does not exceed >5%. However, which such a high degree of missingness (approximately 100%), it would be best to use multiple imputation instead of dropping/removing missing values.
 
 
 ### 3.3 Vital-sign distributions by outcome
@@ -446,10 +447,19 @@ Each of these has several hyperparameters (parts of the model we don't directly 
 **Q12 4 marks**: Using R's documentation (e.g., `?logistic_reg`) look up and briefly explain each of the hyperparamters we are tuning in cross-validation for each of the 3 models
 
 ?logistic_reg = glmnet = penalty and mixture
+- penalty = involves two primary penalty parameters: lambda, which controls the overall penalty strength, and alpha, which controls the mixture between Ridge (L2) and Lasso (L1) penalties
+- mixture = controls the balance between Lasso (L1) and Ridge (L2) penalties
 
-?rand_forest = ranger = trees and min_n
+?rand_forest = ranger = min_n
+- min_n = minimum number of data points required to further split a node
 
 ?boost_tree = xgboost = trees, tree_depth, learn_rate, loss_reduction, sample_size, and min_n
+- trees = number of trees
+- tree_depth = maximum number of nodes from the root to leaves for each tree
+- learn_rate = scales the contribution of each additional tree and controls for overfitting and model training speed
+- loss_reduction = minimum reduction in the loss function required to split on a tree's node 
+- sample_size = proportion of training data randomly sampled to build each tree
+- min_n = minimum number of data points required to further split a node
 
 ```{r model-spec}
 glm_spec <- logistic_reg(penalty = tune(), mixture = tune()) |>
@@ -521,7 +531,7 @@ autoplot(tuned, metric = "pr_auc", select_best = TRUE) +
 Is the gap between the best and worst model large relative to the standard errors?
 What does that suggest about model selection here?
 
-The logistic regression with the L1 and L2 correction achieved the highest PR-AUC (~0.76). The model with the worst PR-AUC of ~0.67 was the boost tree. The gap between these two models appears larger on the plot but is actually ~0.09 which is quite small. Moreover, their standard errors overlap which suggests that these differences in model performance are not statistically significant and model performance might actually be anywhere in that range. It is best to choose the highest performing model (logistic regression with L1 and L2 correction), however, any of these models would perform ~basically as well (i.e., ~0.05 to ~0.09). 
+The logistic regression with the L1 and L2 correction achieved the highest PR-AUC (~0.76). The model with the worst PR-AUC of ~0.67 was the boost tree. The gap between these two models appears larger on the plot but is actually ~0.09 which is quite small. Moreover, their standard errors overlap which suggests that these differences in model performance are not statistically significant and model performance might actually be anywhere in that range. It is best to choose the highest performing model (logistic regression with L1 and L2 correction), however, any of these models would perform ~basically just as well (i.e., ~0.05 to ~0.09). 
 
 ```{r}
 rank_results(tuned, rank_metric = "pr_auc", select_best = TRUE) |>
@@ -530,6 +540,8 @@ rank_results(tuned, rank_metric = "pr_auc", select_best = TRUE) |>
 ```
 
 **Q14 (3 marks).** By summarising and comparing the metrics output by this code, describe how each model performed relative to one another.
+
+While the three model types, logistic regression (glm_glm), random forest (rf_rf), and boost tree (xgb_xgb), are ranked 1-3 in the output, the values for each metric determining these ranks are only nominally different (i.e., in most cases to the second decimal point). We can ignore accuracy as all models perform the same at 98% (as noted above). In terms of brier class, all models are nearly perfect with the logistic regression only performing ~0.003 better than the random forest and boost tree models. As for pr-auc, all models are performing well above the 0.02 baseline and are all approaching a perfect pr-auc score is 1.0 -- the difference between the highest peforming pr-auc of 0.76 and the worst at 0.67 is 0.09 which again, is only a minor difference. Again, all models are performing almost the same in terms of specificity at ~100%, which means there's nearly 0 false alarms. However, in terms of the models ability to correctly identify true sepsis positive cases, all models perform worse than chance (worse than 50%). Again, all models are performing at roughly 40% which means 60% of true sepsis positive cases are not being correctly identified.   
 
 ---
 
@@ -571,6 +583,8 @@ preds |>
 
 **Q15 (1 marks).** How many times were true sepsis cases classified as non-sepsis in the test set? Is this more or less than the correct sepsis predictions?
 
+18 people who are truly sepsis positive were wrongfully classified as NOT having sepsis. This is more than true sepsis positive cases that were correctly identified by the model (11 sepsis cases correctly classified). See below.
+
 ```{r conf-matrix}
 preds |>
   conf_mat(truth = SepsisLabel, estimate = .pred_class) |>
@@ -587,47 +601,17 @@ preds |>
 
 Now let's investigate whether the model work equally well/badly across patient groups?
 
-!!! Code block might break, if yes then delete and look at the graphs/plots on the HTML to answer the remaining Qs!!!
+**Code block broken/error message so using your posted HTML to answer questions below** 
 
-```{r subgroup-auc, fig.height = 3.5}
-errors <- augment(final_fit)
-
-subgroup_auc <- function(df, group_var) {
-  df |>
-    group_by() |>
-    filter(n_distinct(SepsisLabel) == 2) |>
-    roc_auc(truth = SepsisLabel, .pred_Sepsis,
-            event_level = "second") |>
-    select(, .estimate)
-}
-
-overall_auc <- collect_metrics(final_fit) |>
-  filter(.metric == "pr_auc") |>
-  pull(.estimate)
-
-bind_rows(
-  errors |> subgroup_auc(Gender)    |> rename(subgroup = 1) |>
-    mutate(subgroup = as.character(subgroup), group = "Sex"),
-  errors |> subgroup_auc(age_group) |> rename(subgroup = 1) |>
-    mutate(subgroup = as.character(subgroup), group = "Age group")
-) |>
-  ggplot(aes(reorder(subgroup, .estimate), .estimate, fill = group)) +
-  geom_col() +
-  geom_hline(yintercept = overall_auc, linetype = 2, colour = "grey40") +
-  coord_flip() +
-  facet_grid(group ~ ., scales = "free_y", space = "free_y") +
-  labs(x = NULL, y = "PR-AUC",
-       title = "Subgroup PR-AUC",
-       subtitle = "Dashed line = overall test AUC") +
-  theme(legend.position = "none")
-```
 
 **Q16 (2 marks).** Is there a subgroup where the model performs noticeably worse than the overall PR-AUC? 
 Suggest one data-driven reason and one clinical reason that could explain the gap.
 
+All subgroups perform much worse that the overall PR-AUC. Comparing subgroups to each other in the age and sex strata, they all perform about the same with difference at roughly the second or third decimal. A data-driven explanation is imbalances in sepsis cases between subgroups in each strata. A possible clinical explanation is that since we know that sepsis is a heterogenous condition, presentation of sepsis cases by subgroups may present very differently (e.g., male/female, middle age/seniors). 
+
 ### 7.2 Variable importance
 
-```{r variable-importance, fig.height = 5}
+```{r variable-importance, fig.height = 8}
 parsnip_fit <- extract_fit_parsnip(final_fit)
 
 importance_tbl <- if (grepl("^rf", best_id)) {
@@ -651,8 +635,10 @@ importance_tbl |>
        x = "Importance", y = NULL)
 ```
 
-**Q17 (2 marks).** Compare the top 3 most important variables to the three predictors you identified in Q1.
+**Q17 (2 marks).** Compare the top 3 most important variables to the three predictors you identified in Q2.
 Do they match? Write one sentence about any variable that surprised you.
+
+The predictors I hypothesized as strong predictors were: diastolic blood pressure, heart rate, and temperature. From the plot above, the top three most important predictors were: lactate, MAP, and WBC. One predictor that ranked relatively high was Unit 1 which is the variable for	"Administrative identifier for ICU unit (MICU)". One reason this could be an important predictor is if many sepsis cases were coming from this particular unit.
 
 ---
 
@@ -661,6 +647,10 @@ Do they match? Write one sentence about any variable that surprised you.
 **Q18 (3 marks).** In 3–5 sentences, address both of the following:
 - What is the single biggest limitation of this analysis (consider the label definition, the static sampling approach, generalisability to other hospitals, etc.)?
 - Would you recommend deploying a model trained this way in a real ICU? If yes, under what monitoring conditions? If no, what would need to change first?
+
+I think generalisability to other hospital populations is the biggest limitation. Data comes from only 2 hospitals in the US. Even if the datset included other US hospitals, generalisability outside the US would be limited given contextual factors like demographics, healthcare system, quality of care, incidence/burden of sepsis.
+
+No, I would not recommend deploying this model in a real ICU. I don't have enought subject knowledge to really critique the methods ("how" the model was trained), but I think the low sensitivity (true positive rate) demonstrated by all 3 model types is concerning. In this scenario, the goal is to identify positive cases over negative cases. The case imbalance likely drove the sensitivity and specificity values from Q13. Prioritizing/optimizing sensitivity should be changed before ever deploying the model in a real world setting. To do so, using a dataset with a better balance in outcomes is recommended.
 
 ---
 
