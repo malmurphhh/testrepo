@@ -64,12 +64,12 @@ I've not supplied a data dictionary with this dataset. This is a VERY common sit
 
 **Q1a (2 marks):** Based on the `glimpse()` output create a simple data dictionary (variable name with a 1-2 sentence explanation of the variable).
 
-- note_id:
-- description: 
-- medical_specialty:
-- sample_name:
-- transcription: 
-- keywords:
+- note_id: unique identifier for each "note" in the dataset
+- description: brief text/description of the procedure/visit/patient
+- medical_specialty: label of the medical domain/specialty for which each note pertains to
+- sample_name: reasons for visit or procedure conducted
+- transcription: detailed description of the visit/procedure including any relevant medical information (e.g., diagnoses)
+- keywords: key terms relevant to the procedure and/or patient condition
 
 **Q1b (2 marks):** What sort of information are you missing about how this dataset was created that could be important to your analyses?
 
@@ -194,11 +194,15 @@ filtered_data |>
 **Q2 (3 marks):** Write a regular expression to find temperature measurements
 in clinical text (e.g., "98.6 F", "37.2°C", "temperature of 38.1", "afebrile").
 Report how many notes in each specialty contain at least one temperature mention. 
-
 Regex builders like [this website](https://spannbaueradam.shinyapps.io/r_regex_tester/) can make it a lot quicker to iterate and improve your regular expressions!
 
+Notes per specialty with at least one temperature mention include:
+- Neurology: 56 
+- Orthopedic: 22 
+- Radiology: 37 
+
 ```{r q2}
-temp_pattern <- "\\d{2,3}/\\d{2,3}(\\s*mmHg)?"
+temp_pattern <- "(?i)(\\b\\d{2,3}\\.\\d\\s*°?\\s*[FC]\\b|temperature\\s*(of)?\\s*\\d{2,3}\\.\\d|temp\\s*[:=]?\\s*\\d{2,3}(\\.\\d)?|\\bafebrile\\b)"
 
 
 filtered_data |>
@@ -262,7 +266,7 @@ stop_words |>
 **Q4 (2 marks):** How many *unique* unigrams (distinct words) are there in total across all the cleaned and tokenised transcriptions for each specialty? Which specialty has the largest vocabulary and which the smallest? Complete the code below, then provide a
 1-2 sentence interpretation of the output. 
 
-Orthopedic has the largest vocabulary with 7692 unique words while Radiology has the smallest vocabulary with 5971 unique words. The tibble output with unique words by medical_specialty calculated these numbers. The tibble outout with mean_unique_words by medical_specialty shows the mean number of unique unigrams per note (i.e., note_id) for each medical_specialty.
+Orthopedic has the largest vocabulary with 7692 unique words while Radiology has the smallest vocabulary with 5971 unique words. The tibble output with unique words by medical_specialty calculated these numbers. The tibble output with mean_unique_words by medical_specialty shows the mean number of unique unigrams per note (i.e., note_id) for each medical_specialty.
 
 ```{r q4}
 tokenised_data |>
@@ -334,8 +338,9 @@ sentences_data |>
 ```
 
 **Q6 (1 mark):** How many *unique* sentences are there in each specialty?
-Uncomment and complete the code below (replace each `___` with the correct column name):
-The orthopedic medical_specialty has the most unique sentences (n = 11175) followed by Neurology with 6647, and the speciality with the least unique sentences is radiology (n = 4567).
+Uncomment and complete the code below (replace each `___` with the correct column name).
+
+The Orthopedic medical_specialty has the most unique sentences (n = 11175) followed by Neurology with 6647, and the speciality with the least unique sentences is Radiology (n = 4567).
 
 ```{r q6}
 sentences_data |>
@@ -367,6 +372,7 @@ word_sample |>
 ```
 
 **Q7 (1 mark):**  Does lemmatising or stemming result in fewer unique words?
+
 Lemmatising results in fewer unique words (n = 3041) compared to stemming (n = 7245).
 
 ```{r stemming_v_lemmatising}
@@ -389,6 +395,8 @@ word_sample |>
 lemmatizer is likely to perform poorly on medical transcription text. Give at
 least two examples of medical terms that would likely be handled incorrectly
 and describe what goes wrong.
+
+A general-purpose English lemmatizer is trained on common English words, not medical-context specific words, which are often derived from other languages (e.g., latin), which is why such a lemmatizer would likely perform poorly on medical transcription text. Moreover, lemmatizers perform poorly on acronyms which medical transcriptions would have many. But even if a lemmatizer was trained to recognize acronyms, general context vs medical context acronyms could likely represent very different things. Another example I noticed in this specific dataset, was the word 'left' which likely refers to the side of the body in the medical context, not the past tense of to leave, thus should not be transformed into the lemma, 'leave'. 
 
 ### Applying lemmatisation to the full dataset
 
@@ -447,7 +455,7 @@ specialty_tfidf |>
 Identify one term that surprises you from any specialty. Complete the code below by replacing `"your_term_here"` with that term to pull an example transcription containing
 it, then briefly explain its clinical context.
 
-Regurgitation seems a little funny in the radiology context. Summarizing the transcript's mention of this term, the patient was recommended a transesophageal echocardiogram to determine the cardioembolic source of her CNS insult. The provider went through a risk/benefit/alternative analysis of the procedure with the patient and one of the risks is risk of aspiration pneumonia from regurgitation of stomach contents. 
+Regurgitation seems a little funny in the Radiology context. Summarizing the transcript's mention of this term, the patient was recommended a transesophageal echocardiogram to determine the cardioembolic source of her CNS insult. The provider went through a risk/benefit/alternative analysis of the procedure with the patient and one of the risks is risk of aspiration pneumonia from regurgitation of stomach contents. 
 
 ```{r q9}
 filtered_data |>
@@ -500,7 +508,59 @@ between Orthopedic and Neurology compared with Orthopedic and Radiology? Is
 this what you would expect given the clinical roles of each specialty? Justify
 your answer in 2-4 sentences.
 
-...
+Words in the Orthopedic and Neurology plot seem to cluster more around the diagonal dashed line (i.e., more lexical similarity) than the words in the Orthopedic and Radiology plot. This is a little surprising to me -- I would've expected Orthopedics and Radiology to be more similar given that medical imaging (X-ray, MRI, etc.) likely come before any Orthopedic surgeries take place. However, the lexical similarity between Orthopedic and Neurology could be that surgery is the treatment for many neurological issues that affect motor function. These three seem very similar... I'm interested to see that the plot of Radiology and Neurology would look like... Radiology and Neurology seem the most linear (see below).
+
+```{r plot Q10 bonus}
+specialty_props <- lemmatised_data |>
+  count(medical_specialty, lemma) |>
+  group_by(medical_specialty) |>
+  mutate(proportion = n / sum(n)) |>
+  ungroup() |>
+  pivot_wider(
+    id_cols = lemma,
+    names_from = medical_specialty,
+    values_from = proportion,
+    values_fill = 0
+  ) |>
+  pivot_longer(
+    c(Orthopedic, Neurology),
+    names_to = "comparison_specialty",
+    values_to = "proportion"
+  )
+
+ggplot(
+  specialty_props |> filter(proportion > 0, Radiology > 0),
+  aes(
+    x = proportion,
+    y = Radiology,
+    colour = abs(Radiology - proportion)
+  )
+) +
+  geom_abline(colour = "grey40", linetype = 2) +
+  geom_jitter(alpha = 0.1, size = 1.8,
+              width = 0.0003, height = 0.0003) +
+  geom_text(
+    aes(label = lemma),
+    check_overlap = TRUE,
+    vjust = 1.5,
+    size = 2.5
+  ) +
+  scale_x_log10(labels = percent_format(accuracy = 0.001)) +
+  scale_y_log10(labels = percent_format(accuracy = 0.001)) +
+  scale_colour_gradient(
+    limits = c(0, 0.003),
+    low = "darkslategray4",
+    high = "gray75"
+  ) +
+  facet_wrap(~comparison_specialty) +
+  theme(legend.position = "none") +
+  labs(
+    y = "Radiology",
+    x = "Comparison specialty",
+    title = "Lemma proportions: Radiology vs. Orthopedic and Neurology"
+  )
+
+```
 
 ---
 
@@ -593,6 +653,12 @@ Which topic do you think corresponds most closely to which specialty, and why?
 Does the vocabulary in each topic match your expectations from the TF-IDF
 results in Section 6?
 
+Topic 1 = "neurological"; likely corresponds with the Neurology specialty given words like "brain', "tumor", "lesion"; Yes, for the most part these words make sense -- however, unremarkable as the word with the highest probability word is surprising to a topic novice like myself (but according to Google an unremarkable neurologic exam is good).
+
+Topic 2 = "imaging"; likely corresponds to the Radiology specialty given words like "cervical", "spine" "lumbar", "disk"; Yes these words make sense within the Radiology specialty, however they're all quite focused on the spine and medical imaging is not necessarily limited to only this area of the body. 
+
+Topic 3 = "musculoskeletal"; likely corresponds with the Orthopedic specialty given words like "tendon", "knee", "foot", "fracture", "ligament"; Yes, these words definitely match my expectations basaed on the TF-IDF results from Section 6. 
+
 ### Document–topic distributions (γ) by specialty
 
 The γ matrix tells us how much each document (i.e., transcript in this case) draws from each topic. We join it
@@ -629,22 +695,26 @@ lda_gamma_specialty |>
 one topic has a noticeably higher mean γ than the others for that specialty)?
 Does this align with the clinical label you assigned to that topic in Q11?
 
+Neurology appears to have the greatest mean topic proportion overall (across all 3 topcis) relative to the other specialties. However, the specialty with the clearest dominant topic appears to be Orthopedic in Topic 3. Topic 1 is almost a tie between Radiology and Neurology while Topic 2 is almost a three way tie. I identified Topic 3 correctly with the "musculoskeletal" label assigned in Q11. 
+
 (b) Uncomment and complete the code below to compute, for each specialty, the single topic
 with the highest mean γ. Replace each `___` with the correct column name or
 expression.
 
 ```{r q12b}
-#lda_gamma_specialty |>
-#  group_by(___, ___) |>
-#  summarise(mean_gamma = mean(gamma), .groups = "drop") |>
-#  group_by(___) |>
-#  slice_max(___, n = 1)
+lda_gamma_specialty |>
+  group_by(medical_specialty, topic) |>
+  summarise(mean_gamma = mean(gamma), .groups = "drop") |>
+  group_by(medical_specialty) |>
+  slice_max(mean_gamma, n = 1)
 ```
 
 (c) Sun et al. (2024) ran LDA on social work notes *without knowing in advance*
 what topics would emerge. How does their situation differ from this exercise,
 where we set `k = 3` to match three known specialties? What does this suggest
 about how to choose the number of topics *k* in a real exploratory analysis?
+
+We had already limited our dataset to 3 known specialties so selecting k = 3 aligned with those 3 preselected specialties. This differs from Sun et al. inductive approach in that they used their entire datset and did not know how many topics/domains would emerge and modelling approaches determined the optimal number of k. This suggests that it is best practice to allow models to determine the # of k groups instead of selecting an arbitrary number or restricting the dataset like we did.
 
 ---
 
@@ -695,12 +765,23 @@ the following prompt:
 (a) What specialty did the LLM predict, and was it correct? Does it match the
 topic with the highest γ from the LDA model above?
 
+*From Copilot*: 
+"Classification: Orthopedic
+Brief reasoning (concise):
+The transcription describes conditions and surgical procedures involving the bones, joints, and deformities of the foot (e.g., bunionectomy, arthrodesis, hammertoe repair, degenerative joint disease). These are all within the musculoskeletal system, which falls under orthopedics, not radiology or neurology."
+
+Yes, Copilots prediction was correct and matched the LDA model output above with the highest gamma (Topic 3 = Orthopedic = 0.99967).
+
 (b) What specific features of the text did the LLM cite to justify its
 classification?
+
+Copilot cited using conditions and surgical procedures involving the bones, joints, and deformities of the foot (e.g., bunionectomy, arthrodesis, hammertoe repair, degenerative joint disease) to make its classification.
 
 (c) Compare LLM's explanation-based classification with LDA's unsupervised
 topic assignment. Which approach would you prefer for classifying a large batch
 of new clinical notes, and why? 
+
+While both Copilot and the LDA chose the same specialty - Orthopedic - I would prefer the LDA's unsupervised topic assignment over the use of an LLM because at least I know the LDA is using the data and the data alone to make its classifications but with an LLM like Copilot or ChatGPT, I do not know what information it's using across the entire internet; LLMs are known to make hallucinations and sometimes LLM's will give fake references when asked.  
 
 ---
 
@@ -712,10 +793,14 @@ SDoH-related topics they identified and state the name of the metric they used
 to evaluate topic quality (hint: it measures the coherence of the top words
 within a topic).
 
+Sun et al. identified "mental health" and "abuse history" SDoH topics using Topic Coherence (C) metric to evaluate topic quality in their LDA model.
+
 **Q15 (1 mark):** Chung et al. (2024) tested GPT-4 Turbo on both
 classification and numerical prediction tasks. Name one task where the LLM
 performed well (give the F1 score) and one where it failed to beat a simple
 baseline (give the MAE and the baseline value for comparison).
+
+Chung et al. LLM model performed well overall on categorical ASA-PS tasks (F1 score = 0.50; 95%CI [0.47-0.53]) but their LLM was inferior to baseline (MAE = 36 minutes [95% CI, 34-38 minutes]) on the PACU Phase1 Duration with Zero-shot on original notes task (MAE = 49 minutes [95% CI, 46-51 minutes]). 
 
 ---
 
