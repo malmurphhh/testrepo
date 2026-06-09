@@ -500,6 +500,8 @@ between Orthopedic and Neurology compared with Orthopedic and Radiology? Is
 this what you would expect given the clinical roles of each specialty? Justify
 your answer in 2-4 sentences.
 
+...
+
 ---
 
 ## Topic Modelling with Latent Dirichlet Allocation
