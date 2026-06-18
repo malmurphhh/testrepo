@@ -12,7 +12,6 @@ output:
     theme: cosmo
     highlight: tango
     number_sections: false
-
 ---
 
 ```{r setup, include = FALSE}
@@ -604,3 +603,4 @@ available Messidor-2 (a *different* country, cameras and protocol). Why is this 
 sessionInfo()
 ```
 
+??
