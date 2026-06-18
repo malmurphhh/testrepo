@@ -1,6 +1,6 @@
 ---
 title: "Practical 3 - Medical Imaging: Detecting Diabetic Retinopathy with CNNs"
-author: "REPLACE WITH YOUR NAME"
+author: "Mallory Murphy"
 date: "`r format(Sys.Date(), '%Y-%m-%d')`"
 output:
   html_document:
@@ -524,7 +524,6 @@ bind_rows(
 be the case for a dataset and network of this size?
 
 Looking at the accuracy across epochs, the augmented and non-augmented runs perfoemd the same and did improve across epochs, staying stable at around ~0.71. On the other hand, loss differed initially and across the 5 epochs between the augmented and non-augmented runs. With the non-augmented run initally had a higher loss value (i.e., performed poorer) it eventually achieved the better/lower loss value by the 5th epoch. Augmentation didn't make a difference for accuracy (i.e., did not hurt nor improve) and despite achieving the worse loss value, didn't necessarily hurt because the differece between the two runs is minimal (~0.01). I would've expected the augmented run to achieve superior values as on a small dataset like this (230 images), the augmentation exposes the model to more variations to learn from. However, from the values, the non-augmented run was able to achieve the same accuracy and better loss than the augmented run.
-
 https://www.baeldung.com/cs/ml-loss-accuracy
 https://www.youtube.com/watch?v=OxYGhiUDJYQ
 https://docs.edgeimpulse.com/knowledge/concepts/machine-learning/data-augmentation
@@ -649,3 +648,4 @@ The point of external validation is to see how generalizable a model is to new/d
 sessionInfo()
 ```
 
+!!!!
