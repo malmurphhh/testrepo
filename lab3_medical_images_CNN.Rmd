@@ -178,8 +178,12 @@ benefit of being able to flag *referable* DR automatically from a photograph? Wh
 screening tool prefer to err towards over-referral? *(Hint: see the opening paragraphs of
 Gulshan et al.)*
 
+Diabetic retinopathy is damaged blood vessels in the eye, particularly the retina, due to diabetes. The benefit of being able to identify Diabetic retinopathy automatically from an image of the retina is that early detection can improve patient outcomes (e.g., prevent blindness), increase efficiency, reproducibility, and coverage of diabetic retinopathy screening programs; and reduce barriers to healthcare access. Given the high prevalence and burden of diabetic retinopathy, over-referral (i.e., more false-negatives) would be preferable in this context to ensure that no false-positives are missed.
+
 **Q2 (2 marks):** Based on `glimpse()` and the data dictionary above, what information about
 how these images were captured is **missing** that could matter for an analysis? Give two examples and say why each matters.
+
+Important information that is missing about how the images were captured is related to the procedure/test. Different procedures vary in their angle/field of view (i.e., how much of the eye is captured), the camera technology, pupil dialation, true-colour vs pseudo-colour, etc. I think having information on the camera type, angle, and pupil dialation would matter most for the analysis as these seem most important for key features related to image quality. If image quality varies across the dataset, model training might be imbalanced in such a way that certain images (i.e., higher quality) are more influential to training than others. This could directly impact model performance (i.e., only performing well on certain images but not others). This could also be relevant to generalizability depending on which technologies/cameras/procedures are more/less common in practice -- for example, if our dataset only includes images from very expensive camera technology or less common angle/field of view than those widely used in practice, then the model might not perform well in other contexts/on other data.  
 
 ### 2.3 Class balance
 
@@ -198,6 +202,10 @@ labels |>
 ```
 
 **Q3 (1 marks):** What sort of ML issues may arise with a dataset that has this sort of label/class balance?
+
+There are more negative cases (i.e., healthy = no diabetic retinopathy) in the all the data splits but the imbalance in the training set is especially high. Similar to Practical 1, imbalance causes issues with model evaluation, particularly accuracy; the model could predict all positive cases (i.e., severe DR) incorrectly but all negative cases (i.e., healthy) correctly, the model would still achieve a relative high accuracy score despite missing all positive cases. It's hard to tell whether the distributions of the outcome (healthy vs severe DR) from the graph, but if the distributions of the outcomes are different between the training set and the testing and validation sets then this would be a case of prior probability shift which could lead to inaccurate predictions.
+https://towardsdatascience.com/precision-recall-curve-is-more-informative-than-roc-in-imbalanced-data-4c95250242f6/
+https://medium.com/data-science/understanding-dataset-shift-f2a5a262a766
 
 ### 2.4 Look at the images
 
@@ -220,6 +228,9 @@ gridExtra::grid.arrange(grobs = plots, nrow = 2, ncol = 3)
 **Q4 (3 marks):** Looking at these images, identify **two** properties that vary between
 photographs of the same class that we may want to normalise/process before training?  Can you see any consistent differences between Grade 4 and Grade 0 photographs? (Rerun the code-block a few times to get different images).
 
+Properties that vary between Grade 4 and Grade 0 images are brightness/exposure, the angle or field of view, and warmness of the image colour (i.e., more red/orange/yellow toned). 
+
+Properties that vary between images of the *same* class are the clarity or fogginess of the image. I noticed this particularly for images labeled Grade 4.
 ---
 
 ## 3 Pre-processing
@@ -296,8 +307,18 @@ dim(one_batch$x)   # expect: batch_size x 3 x 224 x 224
 **Q5 (2 marks):** Explain what each of the four numbers in the batch dimension means. Why is
 the channel dimension `3` here? If, instead of CFP images, we were using a 3D MRI grayscale image that was 1000 pixels/voxels in each dimension, what would be the dimensions output by the above command?
 
+16 x 3 x 224 x 224
+Batch size = 16 = how many images are being evaluated at once
+Channels = 3 = colour channel type; in this case we have colour images, mainly red, green, blue (RGB) which is indicated by 3 (vs 1 for colourless/greyscale images)
+Height = 224 = height of the image in pixels
+Width = 224 = width of the image in pixels
+
+The dimensions of a 3D MRI grayscale image that was 1000 pixels would likely be 16 x 1 x 1000 x 1000
+
 
 **Q6 (1 marks):** If we didn't want to use pre-trained ImageNet networks then we would still probably want to normalise the intensities in our dataset.  What issue might we cause if we normalised using the mean and standard deviation of the pixel intensities across the *whole* dataset (i.e., train, test, and validate combined)?
+
+Normalising across the entire dataset would cause a data leakage problem because the model is getting information about pixel intensity from the images that *should* be reserved for only the testing and validating stages. 
 
 ---
 
@@ -400,6 +421,8 @@ luz::get_metrics(fitted_scratch) |>
 **Q7 (2 marks):** Look at the validation accuracy and loss across epochs. Do you think small network is actually
 *learning* to separate referable from non-referable eyes, why or why not? 
 
+Firstly, given the class imbalance in this dataset, it's possible that the model/network is just predicting the majority class rather than learning to discriminate the two classes from each other. Because loss improves across epochs for both the training and validation sets, the predicted probability is improving but the model/network accuracy remains stable - from the very beginning for the validation set and after the first epoch for the training set. This means that the models discrimination between classes doesn't improve (i.e., the model/network is not learning to discriminate beyond its initial decision/classification).
+
 ## 5 Data Augmentation
 
 When real training data is scarce, **augmentation** synthesises plausible new examples by
@@ -444,17 +467,18 @@ train_transform <- function(path) {
 **Q8a (2 marks):** These augmentations have some real potential drawbacks especially with data from eyes! Explain why flipping an eye horizontally may be misleading in this context then copy the above code to create a new augmentation pipeline `train_transform_fixed` which removes the horizontal flip and adds
 a *small random rotation* (`transform_random_rotation(degrees = ...)`). (Hint: use `?transform_random_rotation` to figure out the parameters for this function).
 
+Flipping an eye horizontally (i.e., 180 degrees) could be misleading because these images tend to be taken in a standard way so that the anatomy in the eye (e.g., optic disc, macula, blood vessels) is consistent across all images but the flip would make everything look mirrored/backwards.  
+
 ```{r q8-augment}
 ## Uncomment, complete the rotation, and rebuild the augmented training dataloader.
-# train_transform <- function(path) {
-#   base_loader(path) |>
-#     transform_to_tensor() |>
-#     transform_random_resized_crop(size = c(224, 224), scale = c(0.8, 1.0)) |>
-#     transform_random_horizontal_flip(p = 0.5) |>
-#     transform_random_rotation(degrees = ___) |>
-#     transform_color_jitter(brightness = 0.2, contrast = 0.2) |>
-#     transform_normalize(mean = imagenet_mean, std = imagenet_std)
-# }
+ train_transform <- function(path) {
+   base_loader(path) |>
+     transform_to_tensor() |>
+     transform_random_resized_crop(size = c(224, 224), scale = c(0.8, 1.0)) |>
+     transform_random_rotation(degrees = c(-20,20)) |>
+     transform_color_jitter(brightness = 0.2, contrast = 0.2) |>
+     transform_normalize(mean = imagenet_mean, std = imagenet_std)
+ }
 ```
 
 Now apply your new augmentations - this will use the incorrect augmentations if you haven't completed Q8!
@@ -462,6 +486,7 @@ Now apply your new augmentations - this will use the incorrect augmentations if 
 ```{r apply_augments}
 train_ds_aug <- fundus_dataset(train_df, train_transform)
 train_dl_aug <- dataloader(train_ds_aug, batch_size = batch_size, shuffle = TRUE)
+
 ```
 
 Now we re-train the *exact same* `simple_cnn` from Section 4, changing only the data it
@@ -489,11 +514,20 @@ bind_rows(
   facet_wrap(~metric, scales = "free_y") +
   labs(title = "Simple CNN: validation curves with vs without augmentation",
        x = "Epoch", y = NULL, colour = NULL)
+
+
+
 ```
 
 **Q8b (2 marks):** Compare the validation curves of the augmented and un-augmented runs of the
 *same* network. Did augmentation help, hurt, or make little difference here, and why might that
 be the case for a dataset and network of this size?
+
+Looking at the accuracy across epochs, the augmented and non-augmented runs perfoemd the same and did improve across epochs, staying stable at around ~0.71. On the other hand, loss differed initially and across the 5 epochs between the augmented and non-augmented runs. With the non-augmented run initally had a higher loss value (i.e., performed poorer) it eventually achieved the better/lower loss value by the 5th epoch. Augmentation didn't make a difference for accuracy (i.e., did not hurt nor improve) and despite achieving the worse loss value, didn't necessarily hurt because the differece between the two runs is minimal (~0.01). I would've expected the augmented run to achieve superior values as on a small dataset like this (230 images), the augmentation exposes the model to more variations to learn from. However, from the values, the non-augmented run was able to achieve the same accuracy and better loss than the augmented run.
+
+https://www.baeldung.com/cs/ml-loss-accuracy
+https://www.youtube.com/watch?v=OxYGhiUDJYQ
+https://docs.edgeimpulse.com/knowledge/concepts/machine-learning/data-augmentation
 
 ## 6 Transfer Learning
 
@@ -547,6 +581,8 @@ luz::get_metrics(fitted_tl) |>
 **Q9 (2 marks):** What is ImageNet, and why would convolution and pooling layers learnt on photos of cats, cars
 and mushrooms improve our ability to predict DR from CFP images (none of which are in the ImageNet dataset)?
 
+ImageNet is a massive image dataset including over 1 million images organized into 100,000 unique, meaningful concepts, with each concept containing around 1000 images. This dataset allows researchers to train machine and deep learning models to identify objects/features of objects in the images. Regardless of object type/image content, all images have key features and patterns. For example, all images have differences in shape, colour, contrast, brightness, curves, lines, texture, etc. which distinguish different elements of the image from others (e.g., and eye from a mouth, the center of the object in image from the edge/exterior). A model that learns convolution and pooling layers from a range of different images (e.g., cats, cars) will learn general image features and can then use these properties as the foundation instead of starting/learning from scratch. The model will be better able to learn more niche/domain specific features starting with general/universal knowledge and then eventually will be better able to detect features that violate the specific pattern (e.g., distinguishing healthy eyes from those with DR). 
+
 ## 7 Evaluating Like a Clinician
 
 Accuracy is misleading under class imbalance (Lab 1... may help with an earlier question in this lab...). Clinically, and in both papers, models are judged on the **ROC curve**, the **AUC**, and a choice of **operating point** trading off
@@ -577,7 +613,13 @@ yardstick::roc_curve(eval_df, truth, .pred_referable, event_level = "first") |>
 A model with two outputs gives us a whole curve, so we can pick *operating points*. Gulshan
 et al. reported one tuned for **high specificity** and one for **high sensitivity**.
 
-**Q10 (2 marks):** Define sensitivity and specificity and explain how there is usual a trade-off between them.  Which is more important in clinical screening program? Approximated using this ROC curve (dark line in plot above - just eyeball the value using the plot), how much specificity would you lose if you wanted perfect sensitivity? Similarly, how bad would the sensitivity be with perfect specificity? 
+**Q10 (2 marks):** Define sensitivity and specificity and explain how there is usual a trade-off between them. Which is more important in clinical screening program? Approximated using this ROC curve (dark line in plot above - just eyeball the value using the plot), how much specificity would you lose if you wanted perfect sensitivity? Similarly, how bad would the sensitivity be with perfect specificity? 
+
+Sensitivity refers to the true positive rate; it is the models ability to correctly identify those *with* the outcome (in this case DR). 
+On the other hand, specificity is the true negative rate; it refers to the models ability to correctly identify those *without* the outcome.  
+There is a trade-off between them because they are the opposite of eachother; increasing or optimizing one will inherently decrease/deoptimize the other.
+In screening programs, sensitivity is generally considered more important because optimizing for high sensitivity will ensure that truly positive cases are not missed or incorrectly labeled as negatives (i.e., false negatives).
+Looking at the ROC curve, a model with perfect (1.00) sensitivity loses about 0.3 specificity (because the x-axis is 1-specificity, so specificity when sensitivity is 1.00 is 0.7). Similarly, if specificity was perfect (1.00) then the corresponding sensitivity is about 0.3 (because the x-axis is 1-specificity, 1-1 = 0, so I'm looking at the corresponding value on the y-axis for the sensitivity value when the x-axis value is 0 (1-1 = 0)). 
 
 ## 8 Interpretability and Clinical Translation
 
@@ -591,11 +633,15 @@ Unfortunately, these sort of analysis methods proved a little too challenging to
 
 **Q11 (1 marks):** Why is an attribution/saliency map more convincing evidence than test
 accuracy/sensitivity/specificity alone when arguing a model is clinically trustworthy? Give one way a model could
-achieve high performance metrics for the *wrong* reason that an attribution map might expose
+achieve high performance metrics for the *wrong* reason that an attribution map might expose.
+
+In this case where we have class imbalance favouring negative cases (i.e., images with healthy eyes) in all three datasets (i.e., training, testing, validation), a model could achieve pretty high performance metrics just by predicting a given image was healthy -- as discussed in Question3 above. An attribution/saliency map like Arcadu et al. built is much more convincing, especially to clinicians who are likely less familiar or trusting in machine learning models and their related metrics, because it shows which features/patterns in the image its using to make its decision which is much more interpretable. In a way, this map serves as a sort of inter-rater reliability check; the clinicians themselves can cross-reference the models' attribution map with their own clinical expertise -- and in the case of Arcadu et al., the map highlighted the same features that clincians focus on to make their decisions. Alternatively, if the model did not use relevant features, this would be much more informative than simply presenting the respective accuracy/sensitivity/specificity values.
 
 **Q12 (1 marks):** Gulshan et al. validated on **two** datasets, including the publicly
 available Messidor-2 (a *different* country, cameras and protocol). Why is this kind of
 *external* validation so much stronger evidence than a held-out split of the same data? 
+
+The point of external validation is to see how generalizable a model is to new/different contexts. While a reserved set of data from the original dataset is OK for testing model performance, the data still comes from the same underlying population of patients, and the technology used and protocol are the same as the training data; this does not simulate application to new contexts in the real world. Gulshan et al. external validation approach is superior to because it is truly different/external (e.g., population, cameras technology, protocol).  
 
 ## 9 Reproducibility
 
@@ -603,4 +649,3 @@ available Messidor-2 (a *different* country, cameras and protocol). Why is this 
 sessionInfo()
 ```
 
-??
